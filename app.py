@@ -555,7 +555,7 @@ with filter_col3:
     selected_forecast_years = st.multiselect(
         "Select Forecast Year",
         options=available_forecast_years,
-        default=available_forecast_years,
+        default=[available_forecast_years[0]] if available_forecast_years else [],
     )
     if not selected_forecast_years:
         selected_forecast_years = available_forecast_years
@@ -590,20 +590,23 @@ if missing_result_columns:
     st.stop()
 
 st.subheader("Dashboard Summary")
+summary_forecast_year = max([int(year) for year in selected_forecast_years])
+summary_result = result_all_years[result_all_years["Forecast Year"].astype(int) == summary_forecast_year].copy()
+
 total_current = df["Current_SE"].sum()
-total_available = round(result["Available Engineers"].sum(), 1)
-total_bau_required = round(result["BAU Required Engineers"].sum(), 1)
-total_dc_required = round(result["DC Incremental Engineers"].sum(), 1)
-total_combined_required = round(result["Combined Required Engineers"].sum(), 1)
-total_combined_hiring = int(result["Combined Additional Required"].sum())
+total_available = round(summary_result["Available Engineers"].sum(), 1)
+total_bau_required = round(summary_result["BAU Required Engineers"].sum(), 1)
+total_dc_required = round(summary_result["DC Incremental Engineers"].sum(), 1)
+total_combined_required = round(summary_result["Combined Required Engineers"].sum(), 1)
+total_combined_hiring = int(summary_result["Combined Additional Required"].sum())
 
 kpi1, kpi2, kpi3, kpi4, kpi5, kpi6 = st.columns(6)
 kpi1.metric("Existing 2026 SE", total_current)
-kpi2.metric("After Attrition", total_available)
-kpi3.metric("BAU Required SE", total_bau_required)
-kpi4.metric("DC Addl. SE", total_dc_required)
-kpi5.metric("Forecast Required SE", total_combined_required)
-kpi6.metric("Additional Required", total_combined_hiring)
+kpi2.metric(f"After Attrition {summary_forecast_year}", total_available)
+kpi3.metric(f"BAU Required SE {summary_forecast_year}", total_bau_required)
+kpi4.metric(f"DC Addl. SE {summary_forecast_year}", total_dc_required)
+kpi5.metric(f"Forecast Required SE {summary_forecast_year}", total_combined_required)
+kpi6.metric(f"Additional Required {summary_forecast_year}", total_combined_hiring)
 
 st.markdown("---")
 st.subheader("Visual Dashboard")
@@ -667,16 +670,18 @@ with tab0:
     selected_forecast_year_text = ", ".join([str(year) for year in selected_forecast_years]) if selected_forecast_years else "All"
 
     summary_total_current = round(df["Current_SE"].sum(), 1)
-    summary_available = round(result["Available Engineers"].sum(), 1)
-    summary_bau_required = round(result["BAU Required Engineers"].sum(), 1)
-    summary_dc_additional = round(result["DC Incremental Engineers"].sum(), 1)
-    summary_required = round(result["Combined Required Engineers"].sum(), 1)
-    summary_additional_required = int(result["Combined Additional Required"].sum())
+    executive_summary_year = max([int(year) for year in selected_forecast_years])
+    executive_summary_result = result_all_years[result_all_years["Forecast Year"].astype(int) == executive_summary_year].copy()
+    summary_available = round(executive_summary_result["Available Engineers"].sum(), 1)
+    summary_bau_required = round(executive_summary_result["BAU Required Engineers"].sum(), 1)
+    summary_dc_additional = round(executive_summary_result["DC Incremental Engineers"].sum(), 1)
+    summary_required = round(executive_summary_result["Combined Required Engineers"].sum(), 1)
+    summary_additional_required = int(executive_summary_result["Combined Additional Required"].sum())
 
     s1, s2, s3 = st.columns(3)
     s1.metric("Existing 2026 SE", summary_total_current)
-    s2.metric("Forecast Required SE", summary_required)
-    s3.metric("Additional Required", summary_additional_required)
+    s2.metric(f"Forecast Required SE {executive_summary_year}", summary_required)
+    s3.metric(f"Additional Required {executive_summary_year}", summary_additional_required)
 
     st.markdown(
         f"""
@@ -686,7 +691,7 @@ with tab0:
                 <li>Input filter: <span class="highlight">Year {selected_input_year_text}</span>, Region <span class="highlight">{selected_region_text}</span>.</li>
                 <li>Forecast years selected: <span class="highlight">{selected_forecast_year_text}</span>.</li>
                 <li>Current installed base: <span class="highlight">{summary_total_current} SE</span>.</li>
-                <li>Available engineers after attrition across selected forecast years: <span class="highlight">{summary_available} SE</span>.</li>
+                <li>Available engineers after attrition for selected summary year: <span class="highlight">{summary_available} SE</span>.</li>
                 <li>BAU required engineers: <span class="highlight">{summary_bau_required} SE</span>.</li>
                 <li>DC incremental engineers: <span class="highlight">{summary_dc_additional} SE</span>.</li>
                 <li>Total forecast requirement: <span class="warning">{summary_required} SE</span>.</li>
@@ -790,7 +795,7 @@ with tab5:
 
     st.markdown("---")
     st.subheader("2027 and 2028 Multiplication Factor Table")
-    multiplication_factor_table = result[result["Forecast Year"].astype(int).isin([2027, 2028])][
+    multiplication_factor_table = result_all_years[result_all_years["Forecast Year"].astype(int).isin([2027, 2028])][
         [
             "Forecast Year",
             "Region",
