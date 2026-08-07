@@ -580,7 +580,18 @@ summary_year = max([int(year) for year in selected_forecast_years])
 summary_result = result_all_years[result_all_years["Forecast Year"].astype(int) == summary_year].copy()
 
 st.subheader("Dashboard Summary")
+
+year_wise_snapshot = build_year_wise_snapshot(df, result_all_years)
+addl_by_year = result_all_years.groupby("Forecast Year")["Combined Additional Required"].sum().to_dict()
+final_by_year = result_all_years.groupby("Forecast Year")["Final Engineers"].sum().to_dict()
+
 total_current = int(round(df["Current_SE"].sum()))
+hiring_2027 = int(addl_by_year.get(2027, 0))
+hiring_2028 = int(addl_by_year.get(2028, 0))
+hiring_2029 = int(addl_by_year.get(2029, 0))
+final_2029 = int(final_by_year.get(2029, 0))
+total_hiring_3yr = hiring_2027 + hiring_2028 + hiring_2029
+
 total_available = int(summary_result["Available Engineers"].sum())
 total_bau_required = int(summary_result["BAU Required Engineers"].sum())
 total_dc_required = int(summary_result["DC Incremental Engineers"].sum())
@@ -588,23 +599,16 @@ total_combined_required = int(summary_result["Combined Required Engineers"].sum(
 total_combined_hiring = int(summary_result["Combined Additional Required"].sum())
 
 kpi1, kpi2, kpi3, kpi4, kpi5, kpi6 = st.columns(6)
-kpi1.metric("Existing 2026 SE", total_current)
-kpi2.metric(f"After Attrition {summary_year}", total_available)
-kpi3.metric(f"BAU Required SE {summary_year}", total_bau_required)
-kpi4.metric(f"DC Addl. SE {summary_year}", total_dc_required)
-kpi5.metric(f"Forecast Required SE {summary_year}", total_combined_required)
-kpi6.metric(f"Additional Required {summary_year}", total_combined_hiring)
-
-st.markdown("### Year-wise Additional Hiring Requirement")
-addl_by_year = result_all_years.groupby("Forecast Year")["Combined Additional Required"].sum().to_dict()
-h1, h2, h3 = st.columns(3)
-h1.metric("Additional Hiring 2027", int(addl_by_year.get(2027, 0)))
-h2.metric("Additional Hiring 2028", int(addl_by_year.get(2028, 0)))
-h3.metric("Additional Hiring 2029", int(addl_by_year.get(2029, 0)))
+kpi1.metric("Current Base SE", total_current)
+kpi2.metric("Hiring 2027", hiring_2027)
+kpi3.metric("Hiring 2028", hiring_2028)
+kpi4.metric("Hiring 2029", hiring_2029)
+kpi5.metric("Final SE 2029", final_2029)
+kpi6.metric("Total Hiring 2027-2029", total_hiring_3yr)
 
 st.markdown("### Year-wise Forecast Clarity")
-year_wise_snapshot = build_year_wise_snapshot(df, result_all_years)
 st.dataframe(year_wise_snapshot, use_container_width=True, hide_index=True)
+st.caption("Top summary is the three-year hiring ask. Detailed year-wise view below shows baseline, after-attrition, forecast requirement, additional hiring, and final SE for each forecast year.")
 
 
 st.markdown("---")
