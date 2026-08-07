@@ -408,4 +408,6 @@ with st.sidebar.form("planning_assumptions_form"):
             height=245,
             column_config={
                 "Product": st.column_config.TextColumn("Product", width=115),
-           
+                "2027 BAU": st.column_config.NumberColumn("2027 BAU %", min_value=0.0, max_value=100.0, step=1.0, width=70),
+                "2027 DC": st.column_config.NumberColumn("2027 DC %", min_value=0.0, max_value=100.0, step=1.0, width=70),
+                "2028 BAU": st.column_config.NumberColumn("2028 BAU %", min_value=0.0, max_value=100.0, step=1.0, 
