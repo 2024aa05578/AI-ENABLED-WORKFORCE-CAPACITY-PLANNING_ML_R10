@@ -7,16 +7,24 @@ import streamlit as st
 
 from workforce_model import calculate_workforce
 
+
 st.set_page_config(
     page_title="AI Enabled Workforce & Capacity Planning",
     page_icon="🚀",
     layout="wide",
 )
 
+
 UP_ARROW = chr(8593)
 BAU_UP_LABEL = "BAU " + UP_ARROW + "%"
 DC_UP_LABEL = "DC " + UP_ARROW + "%"
+
 APP_SCHEMA_VERSION = "v17_headcount_based_forecast"
+
+
+# =====================================================
+# MASTER DATA
+# =====================================================
 
 REGIONS = ["North", "West", "South", "East"]
 
@@ -76,6 +84,11 @@ REGION_STYLES = {
     },
 }
 
+
+# =====================================================
+# DEFAULT PARAMETERS
+# =====================================================
+
 BASE_GROWTH_BY_REGION = {
     "North": {
         "UPS": {"BAU": 20.0, "DC": 10.0},
@@ -117,6 +130,11 @@ DEFAULT_ATTRITION = {
     for product in PRODUCTS
 }
 
+
+# =====================================================
+# STYLING
+# =====================================================
+
 st.markdown(
     """
     <style>
@@ -156,11 +174,19 @@ st.markdown(
 )
 
 
+# =====================================================
+# SESSION STATE
+# =====================================================
+
 def init_state():
     if st.session_state.get("schema_version") != APP_SCHEMA_VERSION:
         st.session_state.schema_version = APP_SCHEMA_VERSION
-        st.session_state.growth_parameters = copy.deepcopy(DEFAULT_GROWTH_PARAMETERS)
-        st.session_state.attrition_parameters = copy.deepcopy(DEFAULT_ATTRITION)
+        st.session_state.growth_parameters = copy.deepcopy(
+            DEFAULT_GROWTH_PARAMETERS
+        )
+        st.session_state.attrition_parameters = copy.deepcopy(
+            DEFAULT_ATTRITION
+        )
         st.session_state.productive_hours = 7.0
         st.session_state.working_days = 20
         st.session_state.target_utilization = 90.0
@@ -170,6 +196,10 @@ def init_state():
         st.session_state.uploaded_file_id = None
         st.session_state.last_filter_signature = None
 
+
+# =====================================================
+# SIDEBAR HELPERS
+# =====================================================
 
 def show_region_header(region):
     style = REGION_STYLES[region]
@@ -270,6 +300,10 @@ def productivity_df_to_values(productivity_df):
 
     return productive_hours, working_days, target_utilization
 
+
+# =====================================================
+# GENERAL HELPERS
+# =====================================================
 
 def add_total_row_and_column(matrix):
     matrix = matrix.copy()
@@ -492,7 +526,16 @@ def show_bar_chart_with_values(data, x_col, y_col, title, color_col=None):
     )
 
 
+# =====================================================
+# INITIALIZE
+# =====================================================
+
 init_state()
+
+
+# =====================================================
+# SIDEBAR FORM
+# =====================================================
 
 st.sidebar.header("Planning Assumptions")
 st.sidebar.caption(
@@ -627,6 +670,10 @@ with st.sidebar.form("planning_assumptions_form"):
         st.sidebar.success("Assumptions applied. Dashboard will refresh.")
 
 
+# =====================================================
+# MAIN PAGE
+# =====================================================
+
 st.title("AI Enabled Workforce & Capacity Planning")
 
 st.info(
@@ -660,6 +707,11 @@ if st.session_state.input_df is None:
     st.stop()
 
 original_df = st.session_state.input_df
+
+
+# =====================================================
+# DASHBOARD FILTERS
+# =====================================================
 
 st.markdown("### Dashboard Filters")
 
@@ -724,6 +776,11 @@ if st.session_state.last_filter_signature != filter_signature:
     st.session_state.needs_recalc = True
     st.session_state.last_filter_signature = filter_signature
 
+
+# =====================================================
+# CALCULATE
+# =====================================================
+
 if st.session_state.needs_recalc or st.session_state.result_df is None:
     try:
         result_all_years = calculate_workforce(
@@ -745,6 +802,7 @@ if st.session_state.needs_recalc or st.session_state.result_df is None:
 
 else:
     result_all_years = st.session_state.result_df
+
 
 with filter_col3:
     available_forecast_years = (
@@ -769,13 +827,22 @@ result = result_all_years[
     result_all_years["Forecast Year"].astype(int).isin(selected_forecast_years)
 ].copy()
 
+
 required_result_columns = [
+    "Forecast Year",
+    "Opening Engineers",
+    "Baseline Engineers",
+    "BAU Growth %",
+    "DC Growth %",
+    "Total Growth %",
+    "Multiplication Factor",
     "Available Engineers",
     "BAU Required Engineers",
     "DC Incremental Engineers",
     "Combined Required Engineers",
     "Combined Additional Required",
     "Closing Engineers",
+    "Final Engineers",
 ]
 
 missing_result_columns = [
@@ -790,6 +857,11 @@ if missing_result_columns:
         + str(missing_result_columns)
     )
     st.stop()
+
+
+# =====================================================
+# DASHBOARD SUMMARY
+# =====================================================
 
 st.subheader("Dashboard Summary")
 
@@ -808,6 +880,11 @@ kpi3.metric("BAU Required SE", total_bau_required)
 kpi4.metric("DC Addl. SE", total_dc_required)
 kpi5.metric("Forecast Required SE", total_combined_required)
 kpi6.metric("Additional Required", total_combined_hiring)
+
+
+# =====================================================
+# VISUAL DASHBOARD
+# =====================================================
 
 st.markdown("---")
 st.subheader("Visual Dashboard")
@@ -876,6 +953,11 @@ with chart_col4:
         "Region",
     )
 
+
+# =====================================================
+# DETAIL TABS
+# =====================================================
+
 tab0, tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
     [
         "Executive Summary",
@@ -887,6 +969,7 @@ tab0, tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
         "Download",
     ]
 )
+
 
 with tab0:
     st.subheader("Executive Summary - Leadership View")
@@ -935,7 +1018,7 @@ with tab0:
                 <li>DC incremental engineers: <span class="highlight">{summary_dc_additional} SE</span>.</li>
                 <li>Total forecast requirement: <span class="warning">{summary_required} SE</span>.</li>
                 <li>Total additional hiring requirement: <span class="warning">{summary_additional_required} SE</span>.</li>
-                <li>Rolling logic applied: 2028 baseline uses 2027 closing engineers, and 2029 baseline uses 2028 closing engineers.</li>
+                <li>Rolling logic applied: 2028 baseline uses 2027 final engineers, and 2029 baseline uses 2028 final engineers.</li>
             </ul>
         </div>
         """,
@@ -984,6 +1067,7 @@ with tab0:
             use_container_width=True,
         )
 
+
 with tab1:
     st.subheader("Uploaded Input Data")
 
@@ -992,6 +1076,7 @@ with tab1:
         use_container_width=True,
     )
 
+
 with tab2:
     st.subheader("Workforce Planning Results")
 
@@ -999,6 +1084,7 @@ with tab2:
         result,
         use_container_width=True,
     )
+
 
 with tab3:
     st.subheader("BU Requirement Comparison")
@@ -1016,6 +1102,7 @@ with tab3:
         bu_comparison,
         use_container_width=True,
     )
+
 
 with tab4:
     st.subheader("DC Addition Requirement Table")
@@ -1063,6 +1150,7 @@ with tab4:
         use_container_width=True,
     )
 
+
 with tab5:
     st.subheader("Yearly Forecast Summary")
 
@@ -1100,6 +1188,50 @@ with tab5:
         use_container_width=True,
     )
 
+    st.markdown("---")
+    st.subheader("2027 and 2028 Multiplication Factor Table")
+
+    multiplication_factor_table = result[
+        result["Forecast Year"].astype(int).isin([2027, 2028])
+    ][
+        [
+            "Forecast Year",
+            "Region",
+            "Product",
+            "Baseline Engineers",
+            "BAU Growth %",
+            "DC Growth %",
+            "Total Growth %",
+            "Multiplication Factor",
+            "Combined Required Engineers",
+            "Attrition %",
+            "Available Engineers",
+            "Combined Additional Required",
+            "Final Engineers",
+        ]
+    ].copy()
+
+    multiplication_factor_table = multiplication_factor_table.sort_values(
+        [
+            "Forecast Year",
+            "Region",
+            "Product",
+        ]
+    )
+
+    st.dataframe(
+        multiplication_factor_table,
+        use_container_width=True,
+    )
+
+    st.caption(
+        "For 2027, Baseline Engineers = uploaded Current_SE. "
+        "For 2028, Baseline Engineers = 2027 Final Engineers. "
+        "Multiplication Factor = 1 + ((BAU Growth % + DC Growth %) / 100)."
+    )
+
+    st.markdown("---")
+
     for forecast_year in selected_forecast_years:
         st.markdown(f"### {forecast_year} Detailed Forecast")
 
@@ -1111,6 +1243,7 @@ with tab5:
             year_result,
             use_container_width=True,
         )
+
 
 with tab6:
     st.subheader("Download Output")
