@@ -595,6 +595,13 @@ kpi4.metric(f"DC Addl. SE {summary_year}", total_dc_required)
 kpi5.metric(f"Forecast Required SE {summary_year}", total_combined_required)
 kpi6.metric(f"Additional Required {summary_year}", total_combined_hiring)
 
+st.markdown("### Year-wise Additional Hiring Requirement")
+addl_by_year = result_all_years.groupby("Forecast Year")["Combined Additional Required"].sum().to_dict()
+h1, h2, h3 = st.columns(3)
+h1.metric("Additional Hiring 2027", int(addl_by_year.get(2027, 0)))
+h2.metric("Additional Hiring 2028", int(addl_by_year.get(2028, 0)))
+h3.metric("Additional Hiring 2029", int(addl_by_year.get(2029, 0)))
+
 st.markdown("### Year-wise Forecast Clarity")
 year_wise_snapshot = build_year_wise_snapshot(df, result_all_years)
 st.dataframe(year_wise_snapshot, use_container_width=True, hide_index=True)
@@ -646,6 +653,32 @@ with tab0:
     s2.metric(f"Forecast Required SE {summary_year}", total_combined_required)
     s3.metric(f"Additional Required {summary_year}", total_combined_hiring)
 
+    st.markdown("### VP Three-Year Forecast Summary")
+    vp_summary = build_year_wise_snapshot(df, result_all_years)[[
+        "Forecast Year",
+        "Baseline SE",
+        "After Attrition SE",
+        "Forecast Required SE",
+        "Additional Required SE",
+        "Final SE",
+    ]]
+    st.dataframe(vp_summary, use_container_width=True, hide_index=True)
+
+    addl_by_year_exec = result_all_years.groupby("Forecast Year")["Combined Additional Required"].sum().to_dict()
+    e1, e2, e3 = st.columns(3)
+    e1.metric("2027 Hiring Ask", int(addl_by_year_exec.get(2027, 0)))
+    e2.metric("2028 Hiring Ask", int(addl_by_year_exec.get(2028, 0)))
+    e3.metric("2029 Hiring Ask", int(addl_by_year_exec.get(2029, 0)))
+
+    exec_action_lines = build_actionable_insights(result_all_years)
+    st.markdown(
+        "<div class='leadership-box'><b>VP-Ready Action Message</b><ul>"
+        + "".join([f"<li>{line}</li>" for line in exec_action_lines])
+        + "<li><span class='warning'>Decision required:</span> approve year-wise hiring phasing and confirm whether recruitment should be front-loaded in the highest demand BU and region.</li>"
+        + "</ul></div>",
+        unsafe_allow_html=True,
+    )
+
     st.markdown(
         f"""
         <div class="leadership-box">
@@ -661,7 +694,7 @@ with tab0:
                 <li>Total forecast requirement: <span class="warning">{total_combined_required} SE</span>.</li>
                 <li>Total additional hiring requirement: <span class="warning">{total_combined_hiring} SE</span>.</li>
                 <li>2027 baseline uses uploaded Current_SE. 2028 baseline uses 2027 final engineers. 2029 baseline uses 2028 final engineers.</li>
-                <li><span class="warning">Next action:</span> use the year-wise forecast table to lock annual hiring phasing, then prioritize the highest region and BU hiring load shown in the actionable message above.</li>
+                <li><span class="warning">Next action:</span> lock annual hiring phasing by year, then prioritize the highest region and BU hiring load.</li>
                 <li><span class="warning">Operating cadence:</span> review 2028 and 2029 assumptions monthly because each year compounds from the prior year final engineer base.</li>
             </ul>
         </div>
