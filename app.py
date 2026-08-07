@@ -606,13 +606,6 @@ st.markdown("### Year-wise Forecast Clarity")
 year_wise_snapshot = build_year_wise_snapshot(df, result_all_years)
 st.dataframe(year_wise_snapshot, use_container_width=True, hide_index=True)
 
-insight_lines = build_actionable_insights(result_all_years)
-st.markdown(
-    "<div class='leadership-box'><b>Actionable 2028 and 2029 Planning Message</b><ul>"
-    + "".join([f"<li>{line}</li>" for line in insight_lines])
-    + "</ul></div>",
-    unsafe_allow_html=True,
-)
 
 st.markdown("---")
 st.subheader("Visual Dashboard")
