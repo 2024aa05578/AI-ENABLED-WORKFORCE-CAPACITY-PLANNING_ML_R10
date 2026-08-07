@@ -1,6 +1,7 @@
 import math
 import pandas as pd
 
+
 FORECAST_YEARS = [2027, 2028, 2029]
 
 
@@ -28,30 +29,28 @@ def calculate_workforce(
     working_days,
     target_utilization,
 ):
+    """
+    v17_headcount_based_forecast
+
+    Corrected rolling headcount forecast logic:
+    - 2027 baseline = uploaded Current_SE.
+    - 2028 baseline = 2027 Final / Closing Engineers.
+    - 2029 baseline = 2028 Final / Closing Engineers.
+
+    Required SE is calculated using multiplication factor:
+        Multiplication Factor = 1 + ((BAU Growth % + DC Growth %) / 100)
+
+        Combined Required Engineers =
+            Opening Engineers * Multiplication Factor
+    """
+
     results = []
-
-    productive_hours = _safe_float(productive_hours, 7.0)
-    working_days = _safe_float(working_days, 20.0)
-    target_utilization = _safe_float(target_utilization, 90.0)
-
-    monthly_capacity_per_engineer = productive_hours * working_days * (target_utilization / 100.0)
-
-    if monthly_capacity_per_engineer <= 0:
-        raise ValueError("Monthly capacity per engineer must be greater than zero.")
 
     for _, row in df.iterrows():
         region = str(row["Region"]).strip()
         product = str(row["Product"]).strip()
-        current_se = _safe_float(row["Current_SE"], 0.0)
 
-        breakdown_workload = _safe_float(row["Breakdown_WO"], 0.0) * _safe_float(row["Breakdown_Hrs"], 0.0)
-        pm_workload = _safe_float(row["PM_WO"], 0.0) * _safe_float(row["PM_Hrs"], 0.0)
-        startup_workload = _safe_float(row["Startup_WO"], 0.0) * _safe_float(row["Startup_Hrs"], 0.0)
-
-        base_workload_hours = breakdown_workload + pm_workload + startup_workload
-
-        opening_engineers = current_se
-        opening_workload_hours = base_workload_hours
+        opening_engineers = _safe_float(row["Current_SE"], 0.0)
 
         for forecast_year in FORECAST_YEARS:
             bau_growth_pct = _growth_value(
@@ -75,15 +74,24 @@ def calculate_workforce(
                 0.0,
             )
 
-            available_engineers = opening_engineers * (1 - attrition_pct / 100.0)
+            total_growth_pct = bau_growth_pct + dc_growth_pct
+            multiplication_factor = 1 + (total_growth_pct / 100.0)
 
-            bau_required_hours = opening_workload_hours * (1 + bau_growth_pct / 100.0)
-            dc_incremental_hours = opening_workload_hours * (dc_growth_pct / 100.0)
-            combined_required_hours = bau_required_hours + dc_incremental_hours
+            available_engineers = opening_engineers * (
+                1 - attrition_pct / 100.0
+            )
 
-            bau_required_engineers = bau_required_hours / monthly_capacity_per_engineer
-            dc_incremental_engineers = dc_incremental_hours / monthly_capacity_per_engineer
-            combined_required_engineers = combined_required_hours / monthly_capacity_per_engineer
+            bau_required_engineers = opening_engineers * (
+                1 + bau_growth_pct / 100.0
+            )
+
+            dc_incremental_engineers = opening_engineers * (
+                dc_growth_pct / 100.0
+            )
+
+            combined_required_engineers = (
+                opening_engineers * multiplication_factor
+            )
 
             additional_required = max(
                 math.ceil(combined_required_engineers - available_engineers),
@@ -98,23 +106,25 @@ def calculate_workforce(
                     "Region": region,
                     "Product": product,
                     "Opening Engineers": round(opening_engineers, 2),
-                    "Attrition %": round(attrition_pct, 2),
-                    "Available Engineers": round(available_engineers, 2),
+                    "Baseline Engineers": round(opening_engineers, 2),
                     "BAU Growth %": round(bau_growth_pct, 2),
                     "DC Growth %": round(dc_growth_pct, 2),
-                    "Opening Workload Hours": round(opening_workload_hours, 2),
-                    "BAU Required Hours": round(bau_required_hours, 2),
-                    "DC Incremental Hours": round(dc_incremental_hours, 2),
-                    "Combined Required Hours": round(combined_required_hours, 2),
+                    "Total Growth %": round(total_growth_pct, 2),
+                    "Multiplication Factor": round(multiplication_factor, 4),
+                    "Attrition %": round(attrition_pct, 2),
+                    "Available Engineers": round(available_engineers, 2),
                     "BAU Required Engineers": round(bau_required_engineers, 2),
                     "DC Incremental Engineers": round(dc_incremental_engineers, 2),
-                    "Combined Required Engineers": round(combined_required_engineers, 2),
+                    "Combined Required Engineers": round(
+                        combined_required_engineers,
+                        2,
+                    ),
                     "Combined Additional Required": int(additional_required),
                     "Closing Engineers": round(closing_engineers, 2),
+                    "Final Engineers": round(closing_engineers, 2),
                 }
             )
 
             opening_engineers = closing_engineers
-            opening_workload_hours = combined_required_hours
 
     return pd.DataFrame(results)
