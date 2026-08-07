@@ -374,30 +374,59 @@ def show_bar_chart_with_values(data, x_col, y_col, title, color_col=None):
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False, "scrollZoom": False})
 
 
-def build_2028_2029_insights(result_all_years):
+def build_year_wise_snapshot(df, result_all_years):
     yearly = result_all_years.groupby("Forecast Year", as_index=False).agg({
+        "Baseline Engineers": "sum",
+        "Available Engineers": "sum",
+        "BAU Required Engineers": "sum",
+        "DC Incremental Engineers": "sum",
         "Combined Required Engineers": "sum",
         "Combined Additional Required": "sum",
         "Final Engineers": "sum",
-        "Available Engineers": "sum",
     })
-    for col in ["Combined Required Engineers", "Combined Additional Required", "Final Engineers", "Available Engineers"]:
-        yearly[col] = yearly[col].round(0).astype(int)
+    yearly = yearly.rename(columns={
+        "Baseline Engineers": "Baseline SE",
+        "Available Engineers": "After Attrition SE",
+        "BAU Required Engineers": "BAU Required SE",
+        "DC Incremental Engineers": "DC Addl. SE",
+        "Combined Required Engineers": "Forecast Required SE",
+        "Combined Additional Required": "Additional Required SE",
+        "Final Engineers": "Final SE",
+    })
+    yearly.insert(1, "Existing 2026 SE", int(round(df["Current_SE"].sum())))
+    value_cols = [col for col in yearly.columns if col != "Forecast Year"]
+    yearly[value_cols] = yearly[value_cols].round(0).astype(int)
+    return yearly
 
+
+def build_actionable_insights(result_all_years):
+    yearly = build_year_wise_snapshot(pd.DataFrame({"Current_SE": [0]}), result_all_years).drop(columns=["Existing 2026 SE"])
     data = {int(row["Forecast Year"]): row for _, row in yearly.iterrows()}
     lines = []
+
     if 2027 in data and 2028 in data:
-        req_delta_28 = int(data[2028]["Combined Required Engineers"] - data[2027]["Combined Required Engineers"])
-        hire_delta_28 = int(data[2028]["Combined Additional Required"] - data[2027]["Combined Additional Required"])
-        lines.append(
-            f"2028 vs 2027: forecast requirement changes by {req_delta_28:+d} SE and additional hiring changes by {hire_delta_28:+d} SE."
-        )
+        req_delta_28 = int(data[2028]["Forecast Required SE"] - data[2027]["Forecast Required SE"])
+        hire_delta_28 = int(data[2028]["Additional Required SE"] - data[2027]["Additional Required SE"])
+        direction_28 = "increase" if hire_delta_28 > 0 else "reduction" if hire_delta_28 < 0 else "no change"
+        lines.append(f"2028 action: plan for {abs(hire_delta_28)} SE {direction_28} in hiring demand versus 2027; forecast requirement changes by {req_delta_28:+d} SE.")
+
     if 2028 in data and 2029 in data:
-        req_delta_29 = int(data[2029]["Combined Required Engineers"] - data[2028]["Combined Required Engineers"])
-        hire_delta_29 = int(data[2029]["Combined Additional Required"] - data[2028]["Combined Additional Required"])
-        lines.append(
-            f"2029 vs 2028: forecast requirement changes by {req_delta_29:+d} SE and additional hiring changes by {hire_delta_29:+d} SE."
-        )
+        req_delta_29 = int(data[2029]["Forecast Required SE"] - data[2028]["Forecast Required SE"])
+        hire_delta_29 = int(data[2029]["Additional Required SE"] - data[2028]["Additional Required SE"])
+        direction_29 = "increase" if hire_delta_29 > 0 else "reduction" if hire_delta_29 < 0 else "no change"
+        lines.append(f"2029 action: plan for {abs(hire_delta_29)} SE {direction_29} in hiring demand versus 2028; forecast requirement changes by {req_delta_29:+d} SE.")
+
+    year_region = result_all_years.groupby(["Forecast Year", "Region"], as_index=False)["Combined Additional Required"].sum()
+    if not year_region.empty:
+        top_region = year_region.sort_values("Combined Additional Required", ascending=False).iloc[0]
+        lines.append(f"Deployment focus: highest hiring load is {int(top_region['Combined Additional Required'])} SE in {top_region['Region']} during {int(top_region['Forecast Year'])}; prepare onboarding and deployment capacity for that region first.")
+
+    year_product = result_all_years.groupby(["Forecast Year", "Product"], as_index=False)["Combined Additional Required"].sum()
+    if not year_product.empty:
+        top_product = year_product.sort_values("Combined Additional Required", ascending=False).iloc[0]
+        lines.append(f"BU focus: highest hiring load is {int(top_product['Combined Additional Required'])} SE for {top_product['Product']} during {int(top_product['Forecast Year'])}; prioritize sourcing and training for that BU.")
+
+    lines.append("Governance action: review the year-wise growth and attrition assumptions monthly, because 2028 and 2029 depend on the prior year final engineer base.")
     return lines
 
 
@@ -566,14 +595,17 @@ kpi4.metric(f"DC Addl. SE {summary_year}", total_dc_required)
 kpi5.metric(f"Forecast Required SE {summary_year}", total_combined_required)
 kpi6.metric(f"Additional Required {summary_year}", total_combined_hiring)
 
-insight_lines = build_2028_2029_insights(result_all_years)
-if insight_lines:
-    st.markdown(
-        "<div class='leadership-box'><b>2028 and 2029 Analysis Insights</b><ul>"
-        + "".join([f"<li>{line}</li>" for line in insight_lines])
-        + "</ul></div>",
-        unsafe_allow_html=True,
-    )
+st.markdown("### Year-wise Forecast Clarity")
+year_wise_snapshot = build_year_wise_snapshot(df, result_all_years)
+st.dataframe(year_wise_snapshot, use_container_width=True, hide_index=True)
+
+insight_lines = build_actionable_insights(result_all_years)
+st.markdown(
+    "<div class='leadership-box'><b>Actionable 2028 and 2029 Planning Message</b><ul>"
+    + "".join([f"<li>{line}</li>" for line in insight_lines])
+    + "</ul></div>",
+    unsafe_allow_html=True,
+)
 
 st.markdown("---")
 st.subheader("Visual Dashboard")
@@ -629,6 +661,8 @@ with tab0:
                 <li>Total forecast requirement: <span class="warning">{total_combined_required} SE</span>.</li>
                 <li>Total additional hiring requirement: <span class="warning">{total_combined_hiring} SE</span>.</li>
                 <li>2027 baseline uses uploaded Current_SE. 2028 baseline uses 2027 final engineers. 2029 baseline uses 2028 final engineers.</li>
+                <li><span class="warning">Next action:</span> use the year-wise forecast table to lock annual hiring phasing, then prioritize the highest region and BU hiring load shown in the actionable message above.</li>
+                <li><span class="warning">Operating cadence:</span> review 2028 and 2029 assumptions monthly because each year compounds from the prior year final engineer base.</li>
             </ul>
         </div>
         """,
@@ -673,18 +707,8 @@ with tab4:
 
 with tab5:
     st.subheader("Yearly Forecast Summary")
-    yearly_summary = result_all_years.groupby("Forecast Year", as_index=False).agg({
-        "Baseline Engineers": "sum",
-        "Available Engineers": "sum",
-        "BAU Required Engineers": "sum",
-        "DC Incremental Engineers": "sum",
-        "Combined Required Engineers": "sum",
-        "Combined Additional Required": "sum",
-        "Final Engineers": "sum",
-    })
-    value_cols = ["Baseline Engineers", "Available Engineers", "BAU Required Engineers", "DC Incremental Engineers", "Combined Required Engineers", "Combined Additional Required", "Final Engineers"]
-    yearly_summary[value_cols] = yearly_summary[value_cols].round(0).astype(int)
-    st.dataframe(yearly_summary, use_container_width=True)
+    yearly_summary = build_year_wise_snapshot(df, result_all_years)
+    st.dataframe(yearly_summary, use_container_width=True, hide_index=True)
 
     st.markdown("---")
     st.subheader("2027 and 2028 Multiplication Factor Table")
