@@ -255,6 +255,226 @@ def show_year_grouped_chart(data, x_col, y_col, title):
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False, "scrollZoom": False})
 
 
+def build_key_assumptions_table(growth_parameters, attrition_parameters):
+    rows = []
+
+    for forecast_year in FORECAST_YEARS:
+        for region in REGIONS:
+            for product in PRODUCTS:
+                rows.append(
+                    {
+                        "Forecast Year": int(forecast_year),
+                        "Region": region,
+                        "Product": product,
+                        "BAU Growth %": int(round(safe_float(
+                            growth_parameters[forecast_year][region][product]["BAU"],
+                            0,
+                        ))),
+                        "DC Growth %": int(round(safe_float(
+                            growth_parameters[forecast_year][region][product]["DC"],
+                            0,
+                        ))),
+                        "Attrition %": int(round(safe_float(
+                            attrition_parameters[forecast_year].get(product, 0),
+                            0,
+                        ))),
+                    }
+                )
+
+    assumptions = pd.DataFrame(rows)
+
+    assumptions_summary = (
+        assumptions
+        .groupby("Forecast Year", as_index=False)
+        .agg(
+            {
+                "BAU Growth %": "mean",
+                "DC Growth %": "mean",
+                "Attrition %": "mean",
+            }
+        )
+    )
+
+    assumptions_summary["Total Growth %"] = (
+        assumptions_summary["BAU Growth %"]
+        + assumptions_summary["DC Growth %"]
+    )
+
+    assumptions_summary = assumptions_summary[
+        [
+            "Forecast Year",
+            "BAU Growth %",
+            "DC Growth %",
+            "Total Growth %",
+            "Attrition %",
+        ]
+    ]
+
+    value_columns = [
+        "BAU Growth %",
+        "DC Growth %",
+        "Total Growth %",
+        "Attrition %",
+    ]
+
+    assumptions_summary[value_columns] = (
+        assumptions_summary[value_columns]
+        .round(1)
+    )
+
+    return assumptions_summary
+
+
+def style_assumptions_table(table):
+    numeric_columns = [
+        column
+        for column in table.columns
+        if column != "Forecast Year"
+    ]
+
+    def apply_colors(data):
+        styles = pd.DataFrame("", index=data.index, columns=data.columns)
+        styles["Forecast Year"] = (
+            "background-color:#dfeaff;"
+            "color:#243447;"
+            "font-weight:800;"
+            "text-align:center;"
+        )
+        for column in ["BAU Growth %", "DC Growth %", "Total Growth %"]:
+            styles[column] = (
+                "background-color:#eaf2ff;"
+                "color:#174a7c;"
+                "font-weight:700;"
+            )
+        styles["Attrition %"] = (
+            "background-color:#fff1df;"
+            "color:#8a4a00;"
+            "font-weight:800;"
+        )
+        return styles
+
+    return (
+        table.style
+        .format({column: "{:.1f}%" for column in numeric_columns})
+        .apply(apply_colors, axis=None)
+        .set_table_styles(
+            [
+                {
+                    "selector": "th",
+                    "props": [
+                        ("background-color", "#dfeaff"),
+                        ("color", "#243447"),
+                        ("font-weight", "800"),
+                        ("border", "1px solid #cbd8ee"),
+                        ("text-align", "center"),
+                    ],
+                },
+                {
+                    "selector": "td",
+                    "props": [
+                        ("border", "1px solid #e6eaf2"),
+                        ("font-size", "13px"),
+                        ("text-align", "center"),
+                    ],
+                },
+            ]
+        )
+    )
+
+
+def show_yoy_growth_chart(result_all_years):
+    yearly = (
+        result_all_years
+        .groupby("Forecast Year", as_index=False)
+        .agg(
+            {
+                "Combined Required Engineers": "sum",
+                "Combined Additional Required": "sum",
+                "Final Engineers": "sum",
+            }
+        )
+        .sort_values("Forecast Year")
+    )
+
+    yearly["Forecast Requirement Growth %"] = (
+        yearly["Combined Required Engineers"]
+        .pct_change()
+        .mul(100)
+        .fillna(0)
+    )
+
+    yearly["Final Workforce Growth %"] = (
+        yearly["Final Engineers"]
+        .pct_change()
+        .mul(100)
+        .fillna(0)
+    )
+
+    chart_data = yearly.melt(
+        id_vars=["Forecast Year"],
+        value_vars=[
+            "Forecast Requirement Growth %",
+            "Final Workforce Growth %",
+        ],
+        var_name="Growth Measure",
+        value_name="YoY Growth %",
+    )
+
+    chart_data["Forecast Year"] = chart_data["Forecast Year"].astype(str)
+
+    fig = px.line(
+        chart_data,
+        x="Forecast Year",
+        y="YoY Growth %",
+        color="Growth Measure",
+        markers=True,
+        text="YoY Growth %",
+        title="Year-over-Year Growth Trend",
+        color_discrete_map={
+            "Forecast Requirement Growth %": "#4F81BD",
+            "Final Workforce Growth %": "#F5A623",
+        },
+    )
+
+    fig.update_traces(
+        texttemplate="%{text:.1f}%",
+        textposition="top center",
+        line=dict(width=3),
+        marker=dict(size=10),
+        hovertemplate=(
+            "<b>Forecast Year %{x}</b><br>"
+            "%{fullData.name}: %{y:.1f}%"
+            "<extra></extra>"
+        ),
+    )
+
+    fig.update_layout(
+        height=430,
+        title_x=0.05,
+        xaxis_title="Forecast Year",
+        yaxis_title="YoY Growth %",
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        legend_title_text="Growth Measure",
+        hoverlabel=dict(
+            bgcolor="white",
+            font_size=13,
+            font_color="#243447",
+            bordercolor="#4f7cff",
+        ),
+        margin=dict(l=40, r=30, t=70, b=60),
+    )
+
+    fig.update_xaxes(fixedrange=True)
+    fig.update_yaxes(fixedrange=True, zeroline=True, zerolinecolor="#cbd8ee")
+
+    st.plotly_chart(
+        fig,
+        use_container_width=True,
+        config={"displayModeBar": False, "scrollZoom": False},
+    )
+
+
 def init_state():
     if st.session_state.get("schema_version") != APP_SCHEMA_VERSION:
         st.session_state.schema_version = APP_SCHEMA_VERSION
@@ -923,3 +1143,78 @@ with tab6:
     st.subheader("Download Output")
     csv_output = result.to_csv(index=False).encode("utf-8")
     st.download_button(label="Download Workforce Planning Output", data=csv_output, file_name="workforce_planning_output_v17.csv", mime="text/csv")
+
+st.markdown("---")
+st.subheader("Key Planning Assumptions")
+st.caption(
+    "Year-wise averages across all selected regions and products. "
+    "Blue cells show growth assumptions, and orange cells show attrition assumptions."
+)
+
+key_assumptions_table = build_key_assumptions_table(
+    st.session_state.growth_parameters,
+    st.session_state.attrition_parameters,
+)
+
+st.dataframe(
+    style_assumptions_table(key_assumptions_table),
+    use_container_width=True,
+    hide_index=True,
+)
+
+st.markdown("### Year-over-Year Growth")
+st.caption(
+    "2027 is shown as the starting forecast year. "
+    "The chart compares growth in forecast requirement and final workforce for 2028 and 2029."
+)
+show_yoy_growth_chart(result_all_years)
+
+st.markdown("---")
+st.subheader("Consolidated Three-Year Summary")
+st.caption(
+    "Hover over chart bars and metric labels for calculation context. "
+    "The table below consolidates the full 2027 to 2029 workforce plan."
+)
+
+final_summary = build_year_wise_snapshot(df, result_all_years).copy()
+final_summary["YoY Required Change SE"] = (
+    final_summary["Forecast Required SE"]
+    .diff()
+    .fillna(final_summary["Forecast Required SE"] - final_summary["Existing 2026 SE"])
+    .astype(int)
+)
+final_summary["YoY Hiring Change SE"] = (
+    final_summary["Additional Required SE"]
+    .diff()
+    .fillna(final_summary["Additional Required SE"])
+    .astype(int)
+)
+final_summary["Cumulative Hiring SE"] = (
+    final_summary["Additional Required SE"]
+    .cumsum()
+    .astype(int)
+)
+
+final_summary = final_summary[
+    [
+        "Forecast Year",
+        "Existing 2026 SE",
+        "Baseline SE",
+        "After Attrition SE",
+        "BAU Required SE",
+        "DC Addl. SE",
+        "Forecast Required SE",
+        "Additional Required SE",
+        "Final SE",
+        "YoY Required Change SE",
+        "YoY Hiring Change SE",
+        "Cumulative Hiring SE",
+    ]
+]
+
+st.dataframe(
+    style_year_summary_table(final_summary),
+    use_container_width=True,
+    hide_index=True,
+)
+
