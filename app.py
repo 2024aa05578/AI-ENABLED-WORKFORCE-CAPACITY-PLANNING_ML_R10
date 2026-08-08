@@ -715,7 +715,7 @@ h3.metric("Additional Hiring 2029", int(addl_by_year.get(2029, 0)))
 
 st.markdown("### Year-wise Forecast Clarity")
 year_wise_snapshot = build_year_wise_snapshot(df, result_all_years)
-st.dataframe(style_year_summary_table(year_wise_snapshot), use_container_width=True, hide_index=True, height=245)
+st.dataframe(style_year_summary_table(year_wise_snapshot), use_container_width=True, hide_index=True)
 
 st.markdown("### Product and Region Requirement by Year")
 product_year_table = build_yearwise_dimension_table(result_all_years, "Product")
@@ -787,7 +787,7 @@ with tab0:
     c6.metric("Total Hiring", total_hiring_exec)
 
     st.markdown("### Three-Year Forecast Summary")
-    st.dataframe(style_year_summary_table(executive_summary_table), use_container_width=True, hide_index=True, height=245)
+    st.dataframe(style_year_summary_table(executive_summary_table), use_container_width=True, hide_index=True)
 
     exec_action_lines = build_actionable_insights(result_all_years)
     st.markdown(
@@ -840,7 +840,7 @@ with tab4:
 with tab5:
     st.subheader("Yearly Forecast Summary")
     yearly_summary = build_year_wise_snapshot(df, result_all_years)
-    st.dataframe(style_year_summary_table(yearly_summary), use_container_width=True, hide_index=True, height=245)
+    st.dataframe(style_year_summary_table(yearly_summary), use_container_width=True, hide_index=True)
 
     st.markdown("---")
     st.subheader("2027 and 2028 Multiplication Factor Table")
