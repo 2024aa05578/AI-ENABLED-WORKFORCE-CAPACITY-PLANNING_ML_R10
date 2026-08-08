@@ -223,7 +223,17 @@ def show_year_grouped_chart(data, x_col, y_col, title):
         title=title,
         color_discrete_map={"2027": "#4F81BD", "2028": "#F5A623", "2029": "#70AD47"},
     )
-    fig.update_traces(texttemplate="%{text:.0f}", textposition="outside", cliponaxis=False)
+    fig.update_traces(
+        texttemplate="%{text:.0f}",
+        textposition="outside",
+        cliponaxis=False,
+        hovertemplate=(
+            "<b>%{x}</b><br>"
+            "Forecast Year: %{fullData.name}<br>"
+            "Requirement: %{y:,.0f} SE"
+            "<extra></extra>"
+        ),
+    )
     fig.update_layout(
         height=450,
         title_x=0.05,
@@ -233,6 +243,12 @@ def show_year_grouped_chart(data, x_col, y_col, title):
         plot_bgcolor="white",
         paper_bgcolor="white",
         legend_title_text="Forecast Year",
+        hoverlabel=dict(
+            bgcolor="white",
+            font_size=13,
+            font_color="#243447",
+            bordercolor="#4f7cff",
+        ),
     )
     fig.update_xaxes(fixedrange=True, tickangle=-20)
     fig.update_yaxes(fixedrange=True, rangemode="tozero")
@@ -477,8 +493,29 @@ def validate_input_data(df):
 def show_bar_chart_with_values(data, x_col, y_col, title, color_col=None):
     if color_col is None:
         color_col = x_col
-    fig = px.bar(data, x=x_col, y=y_col, color=color_col, text=y_col, title=title)
-    fig.update_traces(texttemplate="%{text:.0f}", textposition="outside", cliponaxis=False)
+
+    fig = px.bar(
+        data,
+        x=x_col,
+        y=y_col,
+        color=color_col,
+        text=y_col,
+        title=title,
+        custom_data=[x_col, y_col],
+    )
+
+    fig.update_traces(
+        texttemplate="%{text:.0f}",
+        textposition="outside",
+        cliponaxis=False,
+        hovertemplate=(
+            "<b>%{customdata[0]}</b><br>"
+            + y_col
+            + ": %{customdata[1]:,.0f} SE"
+            + "<extra></extra>"
+        ),
+    )
+
     fig.update_layout(
         height=430,
         title_x=0.05,
@@ -488,10 +525,22 @@ def show_bar_chart_with_values(data, x_col, y_col, title, color_col=None):
         yaxis_title="Engineers",
         plot_bgcolor="white",
         paper_bgcolor="white",
+        hoverlabel=dict(
+            bgcolor="white",
+            font_size=13,
+            font_color="#243447",
+            bordercolor="#4f7cff",
+        ),
     )
+
     fig.update_xaxes(fixedrange=True, tickangle=-20)
     fig.update_yaxes(fixedrange=True, rangemode="tozero")
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False, "scrollZoom": False})
+
+    st.plotly_chart(
+        fig,
+        use_container_width=True,
+        config={"displayModeBar": False, "scrollZoom": False},
+    )
 
 
 def build_year_wise_snapshot(df, result_all_years):
@@ -709,9 +758,9 @@ total_combined_hiring = int(summary_result["Combined Additional Required"].sum()
 st.markdown("### Year-wise Additional Hiring Requirement")
 addl_by_year = result_all_years.groupby("Forecast Year")["Combined Additional Required"].sum().to_dict()
 h1, h2, h3 = st.columns(3)
-h1.metric("Additional Hiring 2027", int(addl_by_year.get(2027, 0)))
-h2.metric("Additional Hiring 2028", int(addl_by_year.get(2028, 0)))
-h3.metric("Additional Hiring 2029", int(addl_by_year.get(2029, 0)))
+h1.metric("Additional Hiring 2027", int(addl_by_year.get(2027, 0)), help="Additional SE required in 2027 after accounting for 2027 attrition and forecast demand.")
+h2.metric("Additional Hiring 2028", int(addl_by_year.get(2028, 0)), help="Additional SE required in 2028 using 2027 Final SE as the opening baseline.")
+h3.metric("Additional Hiring 2029", int(addl_by_year.get(2029, 0)), help="Additional SE required in 2029 using 2028 Final SE as the opening baseline.")
 
 st.markdown("### Year-wise Forecast Clarity")
 year_wise_snapshot = build_year_wise_snapshot(df, result_all_years)
@@ -874,3 +923,53 @@ with tab6:
     st.subheader("Download Output")
     csv_output = result.to_csv(index=False).encode("utf-8")
     st.download_button(label="Download Workforce Planning Output", data=csv_output, file_name="workforce_planning_output_v17.csv", mime="text/csv")
+
+st.markdown("---")
+st.subheader("Consolidated Three-Year Summary")
+st.caption(
+    "Hover over chart bars and metric labels for calculation context. "
+    "The table below consolidates the full 2027 to 2029 workforce plan."
+)
+
+final_summary = build_year_wise_snapshot(df, result_all_years).copy()
+final_summary["YoY Required Change SE"] = (
+    final_summary["Forecast Required SE"]
+    .diff()
+    .fillna(final_summary["Forecast Required SE"] - final_summary["Existing 2026 SE"])
+    .astype(int)
+)
+final_summary["YoY Hiring Change SE"] = (
+    final_summary["Additional Required SE"]
+    .diff()
+    .fillna(final_summary["Additional Required SE"])
+    .astype(int)
+)
+final_summary["Cumulative Hiring SE"] = (
+    final_summary["Additional Required SE"]
+    .cumsum()
+    .astype(int)
+)
+
+final_summary = final_summary[
+    [
+        "Forecast Year",
+        "Existing 2026 SE",
+        "Baseline SE",
+        "After Attrition SE",
+        "BAU Required SE",
+        "DC Addl. SE",
+        "Forecast Required SE",
+        "Additional Required SE",
+        "Final SE",
+        "YoY Required Change SE",
+        "YoY Hiring Change SE",
+        "Cumulative Hiring SE",
+    ]
+]
+
+st.dataframe(
+    style_year_summary_table(final_summary),
+    use_container_width=True,
+    hide_index=True,
+)
+
