@@ -687,25 +687,88 @@ with tab0:
         return pd.concat([output_table, pd.DataFrame([total_row])], ignore_index=True)
 
     def style_vp_table(table, label_column):
-        numeric_columns = [column for column in table.columns if column != label_column]
-        required_columns = [column for column in numeric_columns if column.startswith("Required")]
-        hiring_columns = [column for column in numeric_columns if column.startswith("Hiring")]
+        numeric_columns = [
+            column
+            for column in table.columns
+            if column != label_column
+        ]
 
-        def highlight_total(row):
-            if str(row[label_column]) == "Total":
-                return ["background-color:#fff3cd;font-weight:800;color:#252a34" for _ in row]
-            return ["" for _ in row]
+        required_columns = [
+            column
+            for column in numeric_columns
+            if column.startswith("Required")
+        ]
+
+        hiring_columns = [
+            column
+            for column in numeric_columns
+            if column.startswith("Hiring")
+        ]
+
+        def apply_table_colors(data):
+            styles = pd.DataFrame(
+                "",
+                index=data.index,
+                columns=data.columns,
+            )
+
+            for column in required_columns:
+                styles[column] = (
+                    "background-color:#eaf2ff;"
+                    "color:#174a7c;"
+                    "font-weight:700;"
+                )
+
+            for column in hiring_columns:
+                styles[column] = (
+                    "background-color:#fff1df;"
+                    "color:#8a4a00;"
+                    "font-weight:700;"
+                )
+
+            total_mask = data[label_column].astype(str).eq("Total")
+            styles.loc[total_mask, :] = (
+                "background-color:#fff3cd;"
+                "color:#252a34;"
+                "font-weight:800;"
+                "border-top:2px solid #d6a700;"
+            )
+
+            return styles
 
         return (
             table.style
-            .format({column: "{:,.0f}" for column in numeric_columns})
-            .background_gradient(cmap="Blues", subset=required_columns)
-            .background_gradient(cmap="Oranges", subset=hiring_columns)
-            .apply(highlight_total, axis=1)
-            .set_table_styles([
-                {"selector": "th", "props": [("background-color", "#dfeaff"), ("color", "#243447"), ("font-weight", "800"), ("border", "1px solid #cbd8ee")]},
-                {"selector": "td", "props": [("border", "1px solid #e6eaf2"), ("font-size", "13px")]},
-            ])
+            .format(
+                {
+                    column: "{:,.0f}"
+                    for column in numeric_columns
+                }
+            )
+            .apply(
+                apply_table_colors,
+                axis=None,
+            )
+            .set_table_styles(
+                [
+                    {
+                        "selector": "th",
+                        "props": [
+                            ("background-color", "#dfeaff"),
+                            ("color", "#243447"),
+                            ("font-weight", "800"),
+                            ("border", "1px solid #cbd8ee"),
+                            ("text-align", "center"),
+                        ],
+                    },
+                    {
+                        "selector": "td",
+                        "props": [
+                            ("border", "1px solid #e6eaf2"),
+                            ("font-size", "13px"),
+                        ],
+                    },
+                ]
+            )
         )
 
     st.markdown("### Product and Region Requirement by Year")
