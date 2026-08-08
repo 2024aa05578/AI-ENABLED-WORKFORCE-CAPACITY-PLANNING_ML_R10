@@ -170,6 +170,46 @@ def style_vp_table(table, label_column):
     )
 
 
+def style_year_summary_table(table):
+    label_column = "Forecast Year"
+    blue_columns = [
+        column for column in table.columns
+        if column in [
+            "Existing 2026 SE",
+            "Baseline SE",
+            "After Attrition SE",
+            "BAU Required SE",
+            "DC Addl. SE",
+            "Forecast Required SE",
+            "Final SE",
+        ]
+    ]
+    orange_columns = [
+        column for column in table.columns
+        if column == "Additional Required SE"
+    ]
+    numeric_columns = [column for column in table.columns if column != label_column]
+
+    def apply_summary_colors(data):
+        styles = pd.DataFrame("", index=data.index, columns=data.columns)
+        styles[label_column] = "background-color:#dfeaff;color:#243447;font-weight:800;text-align:center;"
+        for column in blue_columns:
+            styles[column] = "background-color:#eaf2ff;color:#174a7c;font-weight:700;"
+        for column in orange_columns:
+            styles[column] = "background-color:#fff1df;color:#8a4a00;font-weight:800;"
+        return styles
+
+    return (
+        table.style
+        .format({column: "{:,.0f}" for column in numeric_columns})
+        .apply(apply_summary_colors, axis=None)
+        .set_table_styles([
+            {"selector": "th", "props": [("background-color", "#dfeaff"), ("color", "#243447"), ("font-weight", "800"), ("border", "1px solid #cbd8ee"), ("text-align", "center")]},
+            {"selector": "td", "props": [("border", "1px solid #e6eaf2"), ("font-size", "13px"), ("text-align", "center")]},
+        ])
+    )
+
+
 def show_year_grouped_chart(data, x_col, y_col, title):
     chart_data = data.copy()
     chart_data["Forecast Year"] = chart_data["Forecast Year"].astype(str)
@@ -675,7 +715,7 @@ h3.metric("Additional Hiring 2029", int(addl_by_year.get(2029, 0)))
 
 st.markdown("### Year-wise Forecast Clarity")
 year_wise_snapshot = build_year_wise_snapshot(df, result_all_years)
-st.dataframe(year_wise_snapshot, use_container_width=True, hide_index=True)
+st.dataframe(style_year_summary_table(year_wise_snapshot), use_container_width=True, hide_index=True, height=245)
 
 st.markdown("### Product and Region Requirement by Year")
 product_year_table = build_yearwise_dimension_table(result_all_years, "Product")
@@ -683,10 +723,10 @@ region_year_table = build_yearwise_dimension_table(result_all_years, "Region")
 product_col, region_col = st.columns(2)
 with product_col:
     st.markdown("#### Product Level Requirement")
-    st.dataframe(style_vp_table(product_year_table, "Product"), use_container_width=True, hide_index=True)
+    st.dataframe(style_vp_table(product_year_table, "Product"), use_container_width=True, hide_index=True, height=300)
 with region_col:
     st.markdown("#### Region Level Requirement")
-    st.dataframe(style_vp_table(region_year_table, "Region"), use_container_width=True, hide_index=True)
+    st.dataframe(style_vp_table(region_year_table, "Region"), use_container_width=True, hide_index=True, height=300)
 
 st.markdown("---")
 st.subheader("Visual Dashboard - 2027, 2028 and 2029")
@@ -747,7 +787,7 @@ with tab0:
     c6.metric("Total Hiring", total_hiring_exec)
 
     st.markdown("### Three-Year Forecast Summary")
-    st.dataframe(executive_summary_table, use_container_width=True, hide_index=True)
+    st.dataframe(style_year_summary_table(executive_summary_table), use_container_width=True, hide_index=True, height=245)
 
     exec_action_lines = build_actionable_insights(result_all_years)
     st.markdown(
@@ -800,7 +840,7 @@ with tab4:
 with tab5:
     st.subheader("Yearly Forecast Summary")
     yearly_summary = build_year_wise_snapshot(df, result_all_years)
-    st.dataframe(yearly_summary, use_container_width=True, hide_index=True)
+    st.dataframe(style_year_summary_table(yearly_summary), use_container_width=True, hide_index=True, height=245)
 
     st.markdown("---")
     st.subheader("2027 and 2028 Multiplication Factor Table")
