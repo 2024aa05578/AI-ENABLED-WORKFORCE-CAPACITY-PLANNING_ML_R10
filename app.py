@@ -12,7 +12,7 @@ st.set_page_config(
     layout="wide",
 )
 
-APP_SCHEMA_VERSION = "v20_headcount_based_forecast_factor_input"
+APP_SCHEMA_VERSION = "v20_headcount_based_forecast"
 REGIONS = ["North", "West", "South", "East"]
 PRODUCTS = ["UPS", "Cooling", "Power Products", "Power System", "Industrial Automation"]
 FORECAST_YEARS = [2027, 2028, 2029]
@@ -267,73 +267,29 @@ def show_region_header(region):
 
 
 def growth_region_to_df(growth_parameters, region):
-    """2027 remains a percentage input by region and product."""
     rows = []
     for product in PRODUCTS:
-        rows.append(
-            {
-                "Product": PRODUCT_DISPLAY[product],
-                "2027 BAU %": int(growth_parameters[2027][region][product]["BAU"]),
-                "2027 DC %": int(growth_parameters[2027][region][product]["DC"]),
-            }
-        )
+        row = {"Product": PRODUCT_DISPLAY[product]}
+        for year in FORECAST_YEARS:
+            row[f"{year} BAU"] = int(growth_parameters[year][region][product]["BAU"])
+            row[f"{year} DC"] = int(growth_parameters[year][region][product]["DC"])
+        rows.append(row)
     return pd.DataFrame(rows)
 
 
-def growth_region_dfs_to_dict(edited_growth_dfs, factor_df):
-    """
-    Save 2027 as percentages. Convert 2028/2029 multiplication factors back
-    to the internal percentage structure used by the forecast engine.
-
-    BAU factor 1.20 means 20% BAU growth.
-    DC factor 0.10 means 10% incremental DC requirement.
-    Total factor = BAU factor + DC factor.
-    """
+def growth_region_dfs_to_dict(edited_growth_dfs):
     growth_parameters = copy.deepcopy(DEFAULT_GROWTH_PARAMETERS)
-
     for region, growth_df in edited_growth_dfs.items():
         for _, row in growth_df.iterrows():
-            product = PRODUCT_REVERSE_DISPLAY.get(str(row["Product"]).strip())
+            product_label = str(row["Product"]).strip()
+            product = PRODUCT_REVERSE_DISPLAY.get(product_label)
             if product in PRODUCTS:
-                growth_parameters[2027][region][product] = {
-                    "BAU": int(round(safe_float(row["2027 BAU %"], 0))),
-                    "DC": int(round(safe_float(row["2027 DC %"], 0))),
-                }
-
-    for _, row in factor_df.iterrows():
-        region = str(row["Region"]).strip()
-        product = PRODUCT_REVERSE_DISPLAY.get(str(row["Product"]).strip())
-        if region in REGIONS and product in PRODUCTS:
-            for year in [2028, 2029]:
-                bau_factor = max(safe_float(row[f"{year} BAU Factor"], 1.0), 0.0)
-                dc_factor = max(safe_float(row[f"{year} DC Factor"], 0.0), 0.0)
-                growth_parameters[year][region][product] = {
-                    "BAU": round((bau_factor - 1.0) * 100, 2),
-                    "DC": round(dc_factor * 100, 2),
-                }
-
+                for year in FORECAST_YEARS:
+                    growth_parameters[year][region][product] = {
+                        "BAU": int(round(safe_float(row[f"{year} BAU"], 0))),
+                        "DC": int(round(safe_float(row[f"{year} DC"], 0))),
+                    }
     return growth_parameters
-
-
-def future_factor_to_df(growth_parameters):
-    """One common 2028/2029 factor table for every region and product."""
-    rows = []
-    for region in REGIONS:
-        for product in PRODUCTS:
-            row = {
-                "Region": region,
-                "Product": PRODUCT_DISPLAY[product],
-            }
-            for year in [2028, 2029]:
-                bau_pct = safe_float(growth_parameters[year][region][product]["BAU"], 0.0)
-                dc_pct = safe_float(growth_parameters[year][region][product]["DC"], 0.0)
-                bau_factor = 1.0 + (bau_pct / 100.0)
-                dc_factor = dc_pct / 100.0
-                row[f"{year} BAU Factor"] = round(bau_factor, 2)
-                row[f"{year} DC Factor"] = round(dc_factor, 2)
-                row[f"{year} Total Factor"] = round(bau_factor + dc_factor, 2)
-            rows.append(row)
-    return pd.DataFrame(rows)
 
 
 def attrition_to_df(attrition_parameters):
@@ -597,13 +553,11 @@ def build_actionable_insights(result_all_years):
 init_state()
 
 st.sidebar.header("Planning Assumptions")
-st.sidebar.caption("Headcount-based forecast. 2027 uses growth percentages. 2028 and 2029 use multiplication factors on the previous year final engineer baseline. Attrition remains year-wise.")
+st.sidebar.caption("Headcount-based forecast. Attrition and BAU/DC growth are year-wise. 2028 baseline uses 2027 final engineers. 2029 baseline uses 2028 final engineers.")
 
 with st.sidebar.form("planning_assumptions_form"):
-    st.subheader("2027 Growth Input")
-    st.caption("2027 uses BAU and DC growth percentages on uploaded Current_SE.")
+    st.subheader("Region and Product Growth by Forecast Year")
     edited_growth_dfs = {}
-
     for region in REGIONS:
         show_region_header(region)
         edited_growth_dfs[region] = st.data_editor(
@@ -613,53 +567,16 @@ with st.sidebar.form("planning_assumptions_form"):
             disabled=["Product"],
             height=245,
             column_config={
-                "Product": st.column_config.TextColumn("Product", width=120),
-                "2027 BAU %": st.column_config.NumberColumn(
-                    "2027 BAU %", min_value=0, max_value=100, step=1, format="%d", width=85
-                ),
-                "2027 DC %": st.column_config.NumberColumn(
-                    "2027 DC %", min_value=0, max_value=100, step=1, format="%d", width=85
-                ),
+                "Product": st.column_config.TextColumn("Product", width=115),
+                "2027 BAU": st.column_config.NumberColumn("2027 BAU %", min_value=0, max_value=100, step=1, format="%d", width=70),
+                "2027 DC": st.column_config.NumberColumn("2027 DC %", min_value=0, max_value=100, step=1, format="%d", width=70),
+                "2028 BAU": st.column_config.NumberColumn("2028 BAU %", min_value=0, max_value=100, step=1, format="%d", width=70),
+                "2028 DC": st.column_config.NumberColumn("2028 DC %", min_value=0, max_value=100, step=1, format="%d", width=70),
+                "2029 BAU": st.column_config.NumberColumn("2029 BAU %", min_value=0, max_value=100, step=1, format="%d", width=70),
+                "2029 DC": st.column_config.NumberColumn("2029 DC %", min_value=0, max_value=100, step=1, format="%d", width=70),
             },
-            key=f"growth_2027_editor_{region.lower()}",
+            key=f"growth_data_editor_{region.lower()}",
         )
-
-    st.subheader("2028 and 2029 Multiplication Factors")
-    st.caption(
-        "Common table for all regions and products. BAU Factor 1.20 means the previous year final SE baseline plus 20% BAU growth. "
-        "DC Factor 0.10 means an additional 10% of the previous year final SE baseline. Total Factor is applied to the previous year baseline."
-    )
-
-    edited_future_factor_df = st.data_editor(
-        future_factor_to_df(st.session_state.growth_parameters),
-        hide_index=True,
-        use_container_width=True,
-        disabled=["Region", "Product", "2028 Total Factor", "2029 Total Factor"],
-        height=520,
-        column_config={
-            "Region": st.column_config.TextColumn("Region", width=75),
-            "Product": st.column_config.TextColumn("Product", width=115),
-            "2028 BAU Factor": st.column_config.NumberColumn(
-                "2028 BAU", min_value=1.0, max_value=3.0, step=0.01, format="%.2f", width=80
-            ),
-            "2028 DC Factor": st.column_config.NumberColumn(
-                "2028 DC", min_value=0.0, max_value=2.0, step=0.01, format="%.2f", width=75
-            ),
-            "2028 Total Factor": st.column_config.NumberColumn(
-                "2028 Total", format="%.2f", width=80
-            ),
-            "2029 BAU Factor": st.column_config.NumberColumn(
-                "2029 BAU", min_value=1.0, max_value=3.0, step=0.01, format="%.2f", width=80
-            ),
-            "2029 DC Factor": st.column_config.NumberColumn(
-                "2029 DC", min_value=0.0, max_value=2.0, step=0.01, format="%.2f", width=75
-            ),
-            "2029 Total Factor": st.column_config.NumberColumn(
-                "2029 Total", format="%.2f", width=80
-            ),
-        },
-        key="future_factor_editor",
-    )
 
     st.subheader("BU Wise Attrition by Forecast Year")
     edited_attrition_df = st.data_editor(
@@ -693,7 +610,7 @@ with st.sidebar.form("planning_assumptions_form"):
 
     apply_assumptions = st.form_submit_button("Apply Assumptions")
     if apply_assumptions:
-        st.session_state.growth_parameters = growth_region_dfs_to_dict(edited_growth_dfs, edited_future_factor_df)
+        st.session_state.growth_parameters = growth_region_dfs_to_dict(edited_growth_dfs)
         st.session_state.attrition_parameters = attrition_df_to_dict(edited_attrition_df)
         productive_hours, working_days, target_utilization = productivity_df_to_values(edited_productivity_df)
         st.session_state.productive_hours = productive_hours
