@@ -12,7 +12,7 @@ st.set_page_config(
     layout="wide",
 )
 
-APP_SCHEMA_VERSION = "v17_headcount_based_forecast_hcfix3"
+APP_SCHEMA_VERSION = "v20_headcount_based_forecast"
 REGIONS = ["North", "West", "South", "East"]
 PRODUCTS = ["UPS", "Cooling", "Power Products", "Power System", "Industrial Automation"]
 FORECAST_YEARS = [2027, 2028, 2029]
@@ -117,6 +117,86 @@ def safe_float(value, default=0.0):
 
 def to_int(value):
     return int(round(safe_float(value, 0)))
+
+
+def build_yearwise_dimension_table(result_source, dimension_column):
+    grouped = result_source.groupby([dimension_column, "Forecast Year"], as_index=False).agg({
+        "Combined Required Engineers": "sum",
+        "Combined Additional Required": "sum",
+    })
+    table_rows = []
+    for dimension_value in sorted(grouped[dimension_column].dropna().unique().tolist()):
+        row_data = {dimension_column: dimension_value}
+        for forecast_year in FORECAST_YEARS:
+            year_data = grouped[
+                (grouped[dimension_column] == dimension_value)
+                & (grouped["Forecast Year"].astype(int) == forecast_year)
+            ]
+            row_data[f"Required {forecast_year}"] = int(year_data["Combined Required Engineers"].sum()) if not year_data.empty else 0
+            row_data[f"Hiring {forecast_year}"] = int(year_data["Combined Additional Required"].sum()) if not year_data.empty else 0
+        table_rows.append(row_data)
+
+    output_table = pd.DataFrame(table_rows)
+    total_row = {dimension_column: "Total"}
+    for forecast_year in FORECAST_YEARS:
+        total_row[f"Required {forecast_year}"] = int(output_table[f"Required {forecast_year}"].sum())
+        total_row[f"Hiring {forecast_year}"] = int(output_table[f"Hiring {forecast_year}"].sum())
+    return pd.concat([output_table, pd.DataFrame([total_row])], ignore_index=True)
+
+
+def style_vp_table(table, label_column):
+    numeric_columns = [column for column in table.columns if column != label_column]
+    required_columns = [column for column in numeric_columns if column.startswith("Required")]
+    hiring_columns = [column for column in numeric_columns if column.startswith("Hiring")]
+
+    def apply_table_colors(data):
+        styles = pd.DataFrame("", index=data.index, columns=data.columns)
+        for column in required_columns:
+            styles[column] = "background-color:#eaf2ff;color:#174a7c;font-weight:700;"
+        for column in hiring_columns:
+            styles[column] = "background-color:#fff1df;color:#8a4a00;font-weight:700;"
+        total_mask = data[label_column].astype(str).eq("Total")
+        styles.loc[total_mask, :] = "background-color:#fff3cd;color:#252a34;font-weight:800;border-top:2px solid #d6a700;"
+        return styles
+
+    return (
+        table.style
+        .format({column: "{:,.0f}" for column in numeric_columns})
+        .apply(apply_table_colors, axis=None)
+        .set_table_styles([
+            {"selector": "th", "props": [("background-color", "#dfeaff"), ("color", "#243447"), ("font-weight", "800"), ("border", "1px solid #cbd8ee"), ("text-align", "center")]},
+            {"selector": "td", "props": [("border", "1px solid #e6eaf2"), ("font-size", "13px")]},
+        ])
+    )
+
+
+def show_year_grouped_chart(data, x_col, y_col, title):
+    chart_data = data.copy()
+    chart_data["Forecast Year"] = chart_data["Forecast Year"].astype(str)
+    fig = px.bar(
+        chart_data,
+        x=x_col,
+        y=y_col,
+        color="Forecast Year",
+        barmode="group",
+        text=y_col,
+        title=title,
+        color_discrete_map={"2027": "#4F81BD", "2028": "#F5A623", "2029": "#70AD47"},
+    )
+    fig.update_traces(texttemplate="%{text:.0f}", textposition="outside", cliponaxis=False)
+    fig.update_layout(
+        height=450,
+        title_x=0.05,
+        margin=dict(l=40, r=30, t=70, b=90),
+        xaxis_title="",
+        yaxis_title="Engineers",
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        legend_title_text="Forecast Year",
+    )
+    fig.update_xaxes(fixedrange=True, tickangle=-20)
+    fig.update_yaxes(fixedrange=True, rangemode="tozero")
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False, "scrollZoom": False})
 
 
 def init_state():
@@ -579,21 +659,12 @@ result = result_all_years[result_all_years["Forecast Year"].astype(int).isin(sel
 summary_year = max([int(year) for year in selected_forecast_years])
 summary_result = result_all_years[result_all_years["Forecast Year"].astype(int) == summary_year].copy()
 
-st.subheader("Dashboard Summary")
 total_current = int(round(df["Current_SE"].sum()))
 total_available = int(summary_result["Available Engineers"].sum())
 total_bau_required = int(summary_result["BAU Required Engineers"].sum())
 total_dc_required = int(summary_result["DC Incremental Engineers"].sum())
 total_combined_required = int(summary_result["Combined Required Engineers"].sum())
 total_combined_hiring = int(summary_result["Combined Additional Required"].sum())
-
-kpi1, kpi2, kpi3, kpi4, kpi5, kpi6 = st.columns(6)
-kpi1.metric("Existing 2026 SE", total_current)
-kpi2.metric(f"After Attrition {summary_year}", total_available)
-kpi3.metric(f"BAU Required SE {summary_year}", total_bau_required)
-kpi4.metric(f"DC Addl. SE {summary_year}", total_dc_required)
-kpi5.metric(f"Forecast Required SE {summary_year}", total_combined_required)
-kpi6.metric(f"Additional Required {summary_year}", total_combined_hiring)
 
 st.markdown("### Year-wise Additional Hiring Requirement")
 addl_by_year = result_all_years.groupby("Forecast Year")["Combined Additional Required"].sum().to_dict()
@@ -606,24 +677,36 @@ st.markdown("### Year-wise Forecast Clarity")
 year_wise_snapshot = build_year_wise_snapshot(df, result_all_years)
 st.dataframe(year_wise_snapshot, use_container_width=True, hide_index=True)
 
+st.markdown("### Product and Region Requirement by Year")
+product_year_table = build_yearwise_dimension_table(result_all_years, "Product")
+region_year_table = build_yearwise_dimension_table(result_all_years, "Region")
+product_col, region_col = st.columns(2)
+with product_col:
+    st.markdown("#### Product Level Requirement")
+    st.dataframe(style_vp_table(product_year_table, "Product"), use_container_width=True, hide_index=True)
+with region_col:
+    st.markdown("#### Region Level Requirement")
+    st.dataframe(style_vp_table(region_year_table, "Region"), use_container_width=True, hide_index=True)
 
 st.markdown("---")
-st.subheader("Visual Dashboard")
+st.subheader("Visual Dashboard - 2027, 2028 and 2029")
+
+product_required_all = result_all_years.groupby(["Product", "Forecast Year"], as_index=False)["Combined Required Engineers"].sum()
+region_required_all = result_all_years.groupby(["Region", "Forecast Year"], as_index=False)["Combined Required Engineers"].sum()
+product_hiring_all = result_all_years.groupby(["Product", "Forecast Year"], as_index=False)["Combined Additional Required"].sum()
+region_hiring_all = result_all_years.groupby(["Region", "Forecast Year"], as_index=False)["Combined Additional Required"].sum()
+
 chart_col1, chart_col2 = st.columns(2)
 with chart_col1:
-    product_required = summary_result.groupby("Product")["Combined Required Engineers"].sum().reset_index()
-    show_bar_chart_with_values(product_required, "Product", "Combined Required Engineers", f"Forecast Required SE by Product - {summary_year}", "Product")
+    show_year_grouped_chart(product_required_all, "Product", "Combined Required Engineers", "Forecast Required SE by Product")
 with chart_col2:
-    region_required = summary_result.groupby("Region")["Combined Required Engineers"].sum().reset_index()
-    show_bar_chart_with_values(region_required, "Region", "Combined Required Engineers", f"Forecast Required SE by Region - {summary_year}", "Region")
+    show_year_grouped_chart(region_required_all, "Region", "Combined Required Engineers", "Forecast Required SE by Region")
 
 chart_col3, chart_col4 = st.columns(2)
 with chart_col3:
-    product_hiring = summary_result.groupby("Product")["Combined Additional Required"].sum().reset_index()
-    show_bar_chart_with_values(product_hiring, "Product", "Combined Additional Required", f"Additional Requirement by Product - {summary_year}", "Product")
+    show_year_grouped_chart(product_hiring_all, "Product", "Combined Additional Required", "Additional Hiring by Product")
 with chart_col4:
-    region_hiring = summary_result.groupby("Region")["Combined Additional Required"].sum().reset_index()
-    show_bar_chart_with_values(region_hiring, "Region", "Combined Additional Required", f"Additional Requirement by Region - {summary_year}", "Region")
+    show_year_grouped_chart(region_hiring_all, "Region", "Combined Additional Required", "Additional Hiring by Region")
 
 tab0, tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "Executive Summary",
@@ -665,122 +748,6 @@ with tab0:
 
     st.markdown("### Three-Year Forecast Summary")
     st.dataframe(executive_summary_table, use_container_width=True, hide_index=True)
-
-    def build_yearwise_dimension_table(result_source, dimension_column):
-        grouped = result_source.groupby([dimension_column, "Forecast Year"], as_index=False).agg({
-            "Combined Required Engineers": "sum",
-            "Combined Additional Required": "sum",
-        })
-        table_rows = []
-        for dimension_value in sorted(grouped[dimension_column].dropna().unique().tolist()):
-            row_data = {dimension_column: dimension_value}
-            for forecast_year in FORECAST_YEARS:
-                year_data = grouped[(grouped[dimension_column] == dimension_value) & (grouped["Forecast Year"].astype(int) == forecast_year)]
-                row_data[f"Required {forecast_year}"] = int(year_data["Combined Required Engineers"].sum()) if not year_data.empty else 0
-                row_data[f"Hiring {forecast_year}"] = int(year_data["Combined Additional Required"].sum()) if not year_data.empty else 0
-            table_rows.append(row_data)
-        output_table = pd.DataFrame(table_rows)
-        total_row = {dimension_column: "Total"}
-        for forecast_year in FORECAST_YEARS:
-            total_row[f"Required {forecast_year}"] = int(output_table[f"Required {forecast_year}"].sum())
-            total_row[f"Hiring {forecast_year}"] = int(output_table[f"Hiring {forecast_year}"].sum())
-        return pd.concat([output_table, pd.DataFrame([total_row])], ignore_index=True)
-
-    def style_vp_table(table, label_column):
-        numeric_columns = [
-            column
-            for column in table.columns
-            if column != label_column
-        ]
-
-        required_columns = [
-            column
-            for column in numeric_columns
-            if column.startswith("Required")
-        ]
-
-        hiring_columns = [
-            column
-            for column in numeric_columns
-            if column.startswith("Hiring")
-        ]
-
-        def apply_table_colors(data):
-            styles = pd.DataFrame(
-                "",
-                index=data.index,
-                columns=data.columns,
-            )
-
-            for column in required_columns:
-                styles[column] = (
-                    "background-color:#eaf2ff;"
-                    "color:#174a7c;"
-                    "font-weight:700;"
-                )
-
-            for column in hiring_columns:
-                styles[column] = (
-                    "background-color:#fff1df;"
-                    "color:#8a4a00;"
-                    "font-weight:700;"
-                )
-
-            total_mask = data[label_column].astype(str).eq("Total")
-            styles.loc[total_mask, :] = (
-                "background-color:#fff3cd;"
-                "color:#252a34;"
-                "font-weight:800;"
-                "border-top:2px solid #d6a700;"
-            )
-
-            return styles
-
-        return (
-            table.style
-            .format(
-                {
-                    column: "{:,.0f}"
-                    for column in numeric_columns
-                }
-            )
-            .apply(
-                apply_table_colors,
-                axis=None,
-            )
-            .set_table_styles(
-                [
-                    {
-                        "selector": "th",
-                        "props": [
-                            ("background-color", "#dfeaff"),
-                            ("color", "#243447"),
-                            ("font-weight", "800"),
-                            ("border", "1px solid #cbd8ee"),
-                            ("text-align", "center"),
-                        ],
-                    },
-                    {
-                        "selector": "td",
-                        "props": [
-                            ("border", "1px solid #e6eaf2"),
-                            ("font-size", "13px"),
-                        ],
-                    },
-                ]
-            )
-        )
-
-    st.markdown("### Product and Region Requirement by Year")
-    product_year_table = build_yearwise_dimension_table(result_all_years, "Product")
-    region_year_table = build_yearwise_dimension_table(result_all_years, "Region")
-    product_col, region_col = st.columns(2)
-    with product_col:
-        st.markdown("#### Product Level Requirement")
-        st.dataframe(style_vp_table(product_year_table, "Product"), use_container_width=True, hide_index=True)
-    with region_col:
-        st.markdown("#### Region Level Requirement")
-        st.dataframe(style_vp_table(region_year_table, "Region"), use_container_width=True, hide_index=True)
 
     exec_action_lines = build_actionable_insights(result_all_years)
     st.markdown(
