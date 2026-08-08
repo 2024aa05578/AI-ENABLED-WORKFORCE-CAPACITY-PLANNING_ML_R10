@@ -656,7 +656,7 @@ with tab0:
     forecast_required_2029_exec = int(result_all_years.loc[result_all_years["Forecast Year"].astype(int) == 2029, "Combined Required Engineers"].sum())
 
     c1, c2, c3, c4, c5, c6 = st.columns(6)
-    c1.metric("Current Base SE", current_base_se)
+    c1.metric("Current Base SE", total_current)
     c2.metric("Hiring 2027", hiring_2027_exec)
     c3.metric("Hiring 2028", hiring_2028_exec)
     c4.metric("Hiring 2029", hiring_2029_exec)
@@ -725,7 +725,7 @@ with tab0:
         <div class="leadership-box">
             <b>Executive Summary and Important Action Points</b>
             <ul>
-                <li>Current installed base is <span class="highlight">{current_base_se} SE</span>. Projected final workforce by 2029 is <span class="warning">{final_2029_exec} SE</span>.</li>
+                <li>Current installed base is <span class="highlight">{total_current} SE</span>. Projected final workforce by 2029 is <span class="warning">{final_2029_exec} SE</span>.</li>
                 <li>Forecast requirement by 2029 is <span class="warning">{forecast_required_2029_exec} SE</span>. Total hiring requirement across 2027 to 2029 is <span class="warning">{total_hiring_exec} SE</span>.</li>
                 <li>Year-wise hiring ask is <span class="highlight">{hiring_2027_exec} SE in 2027</span>, <span class="highlight">{hiring_2028_exec} SE in 2028</span>, and <span class="highlight">{hiring_2029_exec} SE in 2029</span>.</li>
                 <li>Input filter: <span class="highlight">Year {selected_input_year_text}</span>, Region <span class="highlight">{selected_region_text}</span>. Forecast years selected: <span class="highlight">{selected_forecast_year_text}</span>.</li>
