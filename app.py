@@ -678,8 +678,36 @@ with logo_col:
     )
 
 with title_col:
-    st.title("Schneider Electric Services Workforce & Capacity Planning")
-    st.caption("AI-Enabled Headcount Forecasting for 2027-2029")
+    st.markdown(
+        """
+        <div style="
+            background: linear-gradient(135deg, #3DCD58 0%, #2FAF49 100%);
+            border-radius: 14px;
+            padding: 18px 24px;
+            box-shadow: 0 4px 14px rgba(61, 205, 88, 0.22);
+            border-left: 7px solid #1F7A35;
+        ">
+            <div style="
+                color: white;
+                font-size: 32px;
+                font-weight: 800;
+                line-height: 1.18;
+                margin: 0;
+            ">
+                Schneider Electric Services Workforce &amp; Capacity Planning
+            </div>
+            <div style="
+                color: #F2FFF5;
+                font-size: 16px;
+                font-weight: 500;
+                margin-top: 7px;
+            ">
+                AI-Enabled Headcount Forecasting for 2027-2029
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 st.info("Upload workforce_input.csv, update year-wise assumptions, click Apply Assumptions, and review the rolling 2027, 2028 and 2029 headcount forecast.")
 
