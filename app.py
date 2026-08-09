@@ -1163,55 +1163,6 @@ st.dataframe(
 )
 
 st.markdown("---")
-st.subheader("Consolidated Three-Year Summary")
-st.caption(
-    "Hover over chart bars and metric labels for calculation context. "
-    "The table below consolidates the full 2027 to 2029 workforce plan."
-)
-
-final_summary = build_year_wise_snapshot(df, result_all_years).copy()
-final_summary["YoY Required Change SE"] = (
-    final_summary["Forecast Required SE"]
-    .diff()
-    .fillna(final_summary["Forecast Required SE"] - final_summary["Existing 2026 SE"])
-    .astype(int)
-)
-final_summary["YoY Hiring Change SE"] = (
-    final_summary["Additional Required SE"]
-    .diff()
-    .fillna(final_summary["Additional Required SE"])
-    .astype(int)
-)
-final_summary["Cumulative Hiring SE"] = (
-    final_summary["Additional Required SE"]
-    .cumsum()
-    .astype(int)
-)
-
-final_summary = final_summary[
-    [
-        "Forecast Year",
-        "Existing 2026 SE",
-        "Baseline SE",
-        "After Attrition SE",
-        "BAU Required SE",
-        "DC Addl. SE",
-        "Forecast Required SE",
-        "Additional Required SE",
-        "Final SE",
-        "YoY Required Change SE",
-        "YoY Hiring Change SE",
-        "Cumulative Hiring SE",
-    ]
-]
-
-st.dataframe(
-    style_year_summary_table(final_summary),
-    use_container_width=True,
-    hide_index=True,
-)
-
-st.markdown("---")
 st.subheader("Year-wise Workforce Trend")
 st.caption(
     "Final three-year trend view. 2027 is the starting forecast year, while 2028 and 2029 show the year-over-year change in forecast requirement and final workforce."
