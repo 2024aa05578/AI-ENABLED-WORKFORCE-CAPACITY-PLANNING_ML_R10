@@ -12,7 +12,7 @@ st.set_page_config(
     layout="wide",
 )
 
-APP_SCHEMA_VERSION = "v20_headcount_based_forecast"
+APP_SCHEMA_VERSION = "v20_headcount_based_forecast_default_growth_v2"
 REGIONS = ["North", "West", "South", "East"]
 PRODUCTS = ["UPS", "Cooling", "Power Products", "Power System", "Industrial Automation"]
 FORECAST_YEARS = [2027, 2028, 2029]
@@ -73,6 +73,16 @@ BASE_GROWTH_BY_REGION = {
         "Industrial Automation": {"BAU": 15, "DC": 5},
     },
 }
+
+
+# Standard default assumptions requested for V20:
+# 1. BAU Growth = 10% for every region and every business unit.
+# 2. DC Growth = 0% for Industrial Automation in every region.
+for _region in REGIONS:
+    for _product in PRODUCTS:
+        BASE_GROWTH_BY_REGION[_region][_product]["BAU"] = 10
+
+    BASE_GROWTH_BY_REGION[_region]["Industrial Automation"]["DC"] = 0
 
 DEFAULT_GROWTH_PARAMETERS = {year: copy.deepcopy(BASE_GROWTH_BY_REGION) for year in FORECAST_YEARS}
 DEFAULT_ATTRITION = {year: {product: 8 for product in PRODUCTS} for year in FORECAST_YEARS}
